@@ -1,0 +1,199 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+public class ScriptTileManager : MonoBehaviour
+{
+    [Header("Player Reference")]
+    public Transform player;
+
+    [Header("Custom Starting / Safe Tiles (ด่านจุดเริ่มต้นที่ออกแบบไว้เอง — ถ้ามี)")]
+    [Tooltip("ลาก Prefab ของด่านจุดเริ่มต้น/พื้นที่โล่งที่คุณออกแบบไว้เองมาใส่ได้ (เช่น 1 หรือ 2 แผ่นแรก) ถ้าปล่อยว่างไว้ ระบบจะสุ่มจาก Tile Set ปกติแล้วซ่อน Obstacle แทน")]
+    public GameObject[] startingTilePrefabs;
+
+    [Header("Pre-built Tile Sets (ใส่ Prefab ของชุดด่านหลักที่จะวนสุ่มไปเรื่อยๆ)")]
+    [Tooltip("ลาก Tile Prefab ทั้งหมดที่จัดเซตสิ่งกีดขวางไว้แล้วมาใส่ (ใส่แค่ 1 แมพก่อนก็ได้ ระบบจะปั๊มสำเนาให้เอง)")]
+    public GameObject[] tileSetPrefabs;
+
+    [Tooltip("จำนวนชุดสำรองขั้นต่ำที่จะสร้างเตรียมไว้ต่อ 1 รูปแบบ")]
+    public int copiesPerSet = 3;
+
+    [Header("Track Dimensions & Pool Settings")]
+    public float tileLength = GameConstants.TileLength;
+    [Tooltip("จำนวนแผ่นพื้นที่วางล่วงหน้าด้านหน้าผู้เล่น")]
+    public int tilesOnScreen = 6;
+    [Tooltip("จำนวนแผ่นแรกตอนเริ่มเกมที่จะยังไม่เปิดสิ่งกีดขวาง (ในกรณีไม่ได้ใส่ Starting Tile Prefabs)")]
+    public int safeTiles = 2;
+
+    [Header("Delay Before Hiding (ระยะค้างด้านหลังผู้เล่นก่อนแมพหาย)")]
+    [Tooltip("เมื่อผู้เล่นวิ่งพ้นแผ่นพื้นไปแล้ว จะปล่อยให้แผ่นพื้นค้างอยู่ด้านหลังอีกกี่เมตรก่อนซ่อน (เช่น 25 เมตร = ค้างไว้ด้านหลังอีกเกิน 1 แผ่นเต็มๆ กล้องจะไม่เห็นตอนพื้นหาย)")]
+    public float hideBehindDistance = 25f;
+
+    private float nextSpawnZ = 0f;
+    private int tilesSpawned = 0;
+
+    private readonly List<GameObject> inactivePool = new List<GameObject>();
+
+    private readonly Queue<GameObject> activeTiles = new Queue<GameObject>();
+
+    private readonly HashSet<GameObject> customStartingTiles = new HashSet<GameObject>();
+
+    void Start()
+    {
+        if (player == null)
+        {
+            GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
+            if (playerObj != null) player = playerObj.transform;
+        }
+
+        if (tileLength <= 1f)
+        {
+            tileLength = GameConstants.TileLength;
+        }
+
+        nextSpawnZ = (player != null) ? (player.position.z - 5f) : -5f;
+        tilesSpawned = 0;
+
+        InitializeTilePool();
+
+        if (startingTilePrefabs != null && startingTilePrefabs.Length > 0)
+        {
+            for (int i = 0; i < startingTilePrefabs.Length; i++)
+            {
+                if (startingTilePrefabs[i] != null)
+                {
+                    SpawnCustomStartingTile(startingTilePrefabs[i], i);
+                }
+            }
+        }
+
+        while (activeTiles.Count < tilesOnScreen)
+        {
+            if (tileSetPrefabs == null || tileSetPrefabs.Length == 0) break;
+            ActivateNextTile();
+        }
+    }
+
+    void Update()
+    {
+        if (player == null) return;
+
+        while (nextSpawnZ < player.position.z + (tilesOnScreen * tileLength))
+        {
+            if (tileSetPrefabs == null || tileSetPrefabs.Length == 0) break;
+            ActivateNextTile();
+        }
+
+        if (activeTiles.Count > 0)
+        {
+            GameObject oldestTile = activeTiles.Peek();
+            float oldestTileEndZ = oldestTile.transform.position.z + tileLength;
+
+            if (player.position.z - oldestTileEndZ >= hideBehindDistance)
+            {
+                RecycleOldestTile();
+            }
+        }
+    }
+
+    private void SpawnCustomStartingTile(GameObject startPrefab, int index)
+    {
+        GameObject startTile = Instantiate(startPrefab, new Vector3(0f, 0f, nextSpawnZ), Quaternion.identity, transform);
+        startTile.name = $"{startPrefab.name}_Start_{index}";
+        startTile.SetActive(true);
+
+        customStartingTiles.Add(startTile);
+        activeTiles.Enqueue(startTile);
+
+        nextSpawnZ += tileLength;
+        tilesSpawned++;
+    }
+
+    private void InitializeTilePool()
+    {
+        if (tileSetPrefabs == null || tileSetPrefabs.Length == 0)
+        {
+            Debug.LogWarning("[ScriptTileManager] ยังไม่ได้ใส่ Tile Set Prefabs ใน Inspector!");
+            return;
+        }
+
+        int countPerPrefab = Mathf.Max(1, copiesPerSet);
+        int extraTilesBehind = Mathf.CeilToInt(Mathf.Max(0f, hideBehindDistance) / tileLength) + 2;
+        int requiredTotalTiles = tilesOnScreen + extraTilesBehind + 2;
+
+        while (tileSetPrefabs.Length * countPerPrefab < requiredTotalTiles)
+        {
+            countPerPrefab++;
+        }
+
+        for (int i = 0; i < tileSetPrefabs.Length; i++)
+        {
+            if (tileSetPrefabs[i] == null) continue;
+
+            for (int c = 0; c < countPerPrefab; c++)
+            {
+                CreateNewPooledTile(tileSetPrefabs[i], c);
+            }
+        }
+    }
+
+    private GameObject CreateNewPooledTile(GameObject prefab, int copyIndex)
+    {
+        GameObject tileObj = Instantiate(prefab, Vector3.zero, Quaternion.identity, transform);
+        tileObj.name = $"{prefab.name}_Pool_{copyIndex}";
+        tileObj.SetActive(false);
+        inactivePool.Add(tileObj);
+        return tileObj;
+    }
+
+    private void ActivateNextTile()
+    {
+        if (inactivePool.Count == 0)
+        {
+            if (tileSetPrefabs == null || tileSetPrefabs.Length == 0) return;
+            GameObject fallbackPrefab = tileSetPrefabs[Random.Range(0, tileSetPrefabs.Length)];
+            if (fallbackPrefab == null) return;
+            CreateNewPooledTile(fallbackPrefab, activeTiles.Count + 1);
+        }
+
+        int randomIndex = Random.Range(0, inactivePool.Count);
+        GameObject tile = inactivePool[randomIndex];
+        inactivePool.RemoveAt(randomIndex);
+
+        tile.transform.position = new Vector3(0f, 0f, nextSpawnZ);
+        tile.transform.rotation = Quaternion.identity;
+        tile.SetActive(true);
+
+        bool hasCustomStart = startingTilePrefabs != null && startingTilePrefabs.Length > 0;
+        bool allowObstacles = hasCustomStart || (tilesSpawned >= safeTiles);
+
+        ScriptTileHandler handler = tile.GetComponent<ScriptTileHandler>();
+        if (handler != null)
+        {
+            handler.OnTileActivated(allowObstacles);
+        }
+
+        activeTiles.Enqueue(tile);
+        nextSpawnZ += tileLength;
+        tilesSpawned++;
+    }
+
+    private void RecycleOldestTile()
+    {
+        if (activeTiles.Count == 0) return;
+
+        GameObject oldestTile = activeTiles.Dequeue();
+
+        ScriptTileHandler handler = oldestTile.GetComponent<ScriptTileHandler>();
+        if (handler != null)
+        {
+            handler.OnTileDeactivated();
+        }
+
+        oldestTile.SetActive(false);
+
+        if (!customStartingTiles.Contains(oldestTile))
+        {
+            inactivePool.Add(oldestTile);
+        }
+    }
+}
