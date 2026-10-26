@@ -16,6 +16,11 @@ public class ScriptChaserController : MonoBehaviour
     [Tooltip("เวลาที่หมาจะไล่ตามหลังจากผู้เล่นวิ่งชนสิ่งกีดขวาง (วินาที)")]
     public float chaseDurationAfterHit = 8.0f;
 
+    [Header("Catch Threshold While Retreating (ระยะถอยที่หมายังพุ่งจับได้ทันที)")]
+    [Tooltip("หากหมากำลังถอยห่างแต่ยังไม่เกินสัดส่วนนี้ (0.5 = 50%) แล้วผู้เล่นชนสิ่งกีดขวาง หมาจะจับได้และแพ้ทันที!")]
+    [Range(0f, 1f)]
+    public float catchableRetreatThreshold = 0.5f;
+
     [Header("Distances & Smooth Speeds (ระยะห่างและความเร็วการพุ่งเข้า/ค่อยๆ ถอย)")]
     [Tooltip("ระยะห่างด้านหลังแมวตอนกำลังไล่จี้ตูด (เมตร) — กล้องห่าง 5m ให้หมาห่าง 2.2m จะเห็นหมาอยู่ในจอพอดี")]
     public float chaseDistanceBehind = 2.2f;
@@ -26,10 +31,10 @@ public class ScriptChaserController : MonoBehaviour
     [Tooltip("ความเร็วตอนหมาเร่งสปีดพุ่งเข้ามาประชิดแมว (เมตร/วินาที)")]
     public float approachSpeed = 7.0f;
 
-    [Tooltip("ความเร็วที่หมาค่อยๆ ถอยห่างจากแมวตอนหมดเวลาไล่ (ค่าน้อย = หยังคงวิ่งตามอยู่แต่ช้ากว่าแมวนิดหน่อย จึงค่อยๆ ถอยห่างออกไปอย่างนุ่มนวล ไม่หยุดกึก)")]
+    [Tooltip("ความเร็วที่หมาค่อยๆ ถอยห่างจากแมวตอนหมดเวลาไล่")]
     public float retreatSpeed = 2.2f;
 
-    [Tooltip("ความนุ่มนวลตอนเริ่มผ่อนแรงถอยหลัง (ค่าน้อย = ค่อยๆ ผ่อนความเร็วลงอย่างนุ่มนวล)")]
+    [Tooltip("ความนุ่มนวลตอนเริ่มผ่อนแรงถอยหลัง")]
     public float retreatAcceleration = 2.5f;
 
     [Tooltip("ความเร็วในการเปลี่ยนเลนซ้าย-ขวาตามแมว")]
@@ -40,6 +45,18 @@ public class ScriptChaserController : MonoBehaviour
     public float bobAmplitude = 0.12f;
 
     public bool IsChasing { get; private set; }
+
+    public float RetreatProgress
+    {
+        get
+        {
+            float totalRetreatSpan = Mathf.Max(0.01f, hiddenDistanceBehind - chaseDistanceBehind);
+            return Mathf.Clamp01((currentDistanceBehind - chaseDistanceBehind) / totalRetreatSpan);
+        }
+    }
+
+    public bool CanCatchPlayer =>
+        IsChasing || (!hasCaughtPlayer && IsVisible() && RetreatProgress <= catchableRetreatThreshold);
 
     private float chaseTimer;
     private float currentDistanceBehind;
@@ -102,7 +119,7 @@ public class ScriptChaserController : MonoBehaviour
             if (chaseTimer <= 0f)
             {
                 IsChasing = false;
-                Debug.Log("[Chaser] หมาเริ่มเหนื่อยแล้ว! กำลังค่อยๆ ถอยห่างออกไป...");
+                Debug.Log("[Chaser] หมาเริ่มเหนื่อยและกำลังถอยห่าง (แต่ถ้ายังไม่พ้นระยะ 50% แล้วชนซ้ำ ยังโดนจับได้นะ!)");
             }
         }
         else
@@ -165,20 +182,22 @@ public class ScriptChaserController : MonoBehaviour
         chaseTimer = chaseDurationAfterHit;
         currentRetreatRate = 0f;
 
-        if (!IsVisible() || currentDistanceBehind > 8.0f)
+        if (!IsVisible() || currentDistanceBehind > 8.5f)
         {
-            currentDistanceBehind = 8.0f;
+            currentDistanceBehind = 8.5f;
         }
 
         SetChaserVisible(true);
-        Debug.Log($"[Chaser] แมวสะดุดสิ่งกีดขวาง! หมาพุ่งเข้ามาไล่ตามเป็นเวลา {chaseDurationAfterHit} วินาที (ถ้าชนอีกครั้งจะแพ้ทันที!)");
+        Debug.Log($"[Chaser] แมวสะดุดสิ่งกีดขวาง! หมาพุ่งกลับเข้ามาไล่ตามเป็นเวลา {chaseDurationAfterHit} วินาที");
     }
+
     public void CatchPlayer()
     {
         hasCaughtPlayer = true;
         IsChasing = true;
+        currentRetreatRate = 0f;
         SetChaserVisible(true);
-        Debug.Log("[Chaser] หมาตะครุบแมวได้แล้ว! GAME OVER!");
+        Debug.Log($"[Chaser] หมาพุ่งตะครุบแมวได้! (ระยะถอยขณะชน: {RetreatProgress * 100f:F0}%) GAME OVER!");
     }
 
     private void SetChaserVisible(bool visible)

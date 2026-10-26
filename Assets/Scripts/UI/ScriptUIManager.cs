@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Text;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -13,6 +14,16 @@ public class ScriptUIManager : MonoBehaviour
     public TMP_Text hudDistanceText;
     [Tooltip("ข้อความแสดงจำนวนเหรียญที่เก็บได้ในรอบนี้")]
     public TMP_Text hudCoinsText;
+
+    [Header("1.1 Power-Up Timer UI (ตัวบอกเวลาสถานะพิเศษบนหน้าจอ HUD)")]
+    [Tooltip("(แนะนำ) ข้อความรวมสำหรับแสดงเวลาสถานะพิเศษทั้งหมดในกล่องเดียว (จะแสดงเฉพาะตอนเก็บไอเทม และซ่อนเองเมื่อหมดเวลา)")]
+    public TMP_Text hudPowerUpStatusText;
+
+    [Tooltip("(ทางเลือก) หากต้องการแยกกล่องข้อความเวลาอมตะ (Invincibility) ต่างหาก ลากมาใส่ช่องนี้ได้ (เว้นว่างได้)")]
+    public TMP_Text hudInvincibleTimerText;
+
+    [Tooltip("(ทางเลือก) หากต้องการแยกกล่องข้อความเวลาแม่เหล็ก (Coin Magnet) ต่างหาก ลากมาใส่ช่องนี้ได้ (เว้นว่างได้)")]
+    public TMP_Text hudMagnetTimerText;
 
     [Header("2. Pause Menu UI (UI หยุดเกม)")]
     public GameObject pausePanel;
@@ -50,14 +61,19 @@ public class ScriptUIManager : MonoBehaviour
     public string hudDistancePrefix = "Distance: ";
     public string hudDistanceSuffix = " m";
     public string hudCoinsPrefix = "Coins: ";
+    public string invincibleTimerPrefix = "Invincible: ";
+    public string magnetTimerPrefix = "Magnet: ";
+    public string timerSuffix = "s";
 
     public string gameOverDistancePrefix = "Distance: ";
     public string gameOverHighScorePrefix = "Best: ";
     public string gameOverCoinsPrefix = "Coins Earned: ";
     public string gameOverTotalCoinsPrefix = "Total Coins: ";
 
+    private ScriptPlayerController cachedPlayer;
     private bool isCountingDown;
     private Coroutine countdownCoroutine;
+    private readonly StringBuilder statusBuilder = new StringBuilder();
 
     void OnValidate()
     {
@@ -79,8 +95,10 @@ public class ScriptUIManager : MonoBehaviour
 
     void Start()
     {
+        cachedPlayer = FindFirstObjectByType<ScriptPlayerController>();
         ShowGameplayHUD();
         UpdateHUD();
+        UpdatePowerUpTimersUI();
     }
 
     void Update()
@@ -102,6 +120,7 @@ public class ScriptUIManager : MonoBehaviour
         if (ScriptGameManager.Instance.IsPlaying)
         {
             UpdateHUD();
+            UpdatePowerUpTimersUI();
         }
     }
 
@@ -117,6 +136,70 @@ public class ScriptUIManager : MonoBehaviour
         if (hudCoinsText != null)
         {
             hudCoinsText.text = $"{hudCoinsPrefix}{ScriptGameManager.Instance.SessionCoins:N0}";
+        }
+    }
+
+    public void UpdatePowerUpTimersUI()
+    {
+        if (cachedPlayer == null)
+        {
+            cachedPlayer = FindFirstObjectByType<ScriptPlayerController>();
+        }
+
+        float invTime = cachedPlayer != null ? cachedPlayer.invincibleTimer : 0f;
+        float magTime = cachedPlayer != null ? cachedPlayer.magnetTimer : 0f;
+
+        if (hudPowerUpStatusText != null)
+        {
+            statusBuilder.Clear();
+
+            if (invTime > 0f)
+            {
+                statusBuilder.Append($"{invincibleTimerPrefix}{invTime:F1}{timerSuffix}");
+            }
+
+            if (magTime > 0f)
+            {
+                if (statusBuilder.Length > 0) statusBuilder.AppendLine();
+                statusBuilder.Append($"{magnetTimerPrefix}{magTime:F1}{timerSuffix}");
+            }
+
+            bool hasAnyActive = statusBuilder.Length > 0;
+            if (hudPowerUpStatusText.gameObject.activeSelf != hasAnyActive)
+            {
+                hudPowerUpStatusText.gameObject.SetActive(hasAnyActive);
+            }
+
+            if (hasAnyActive)
+            {
+                hudPowerUpStatusText.text = statusBuilder.ToString();
+            }
+        }
+
+        if (hudInvincibleTimerText != null)
+        {
+            bool active = invTime > 0f;
+            if (hudInvincibleTimerText.gameObject.activeSelf != active)
+            {
+                hudInvincibleTimerText.gameObject.SetActive(active);
+            }
+            if (active)
+            {
+                hudInvincibleTimerText.text = $"{invincibleTimerPrefix}{invTime:F1}{timerSuffix}";
+            }
+        }
+
+        if (hudMagnetTimerText != null)
+        {
+            bool active = magTime > 0f;
+            if (hudMagnetTimerText.gameObject.activeSelf != active)
+            {
+                hudMagnetTimerText.gameObject.SetActive(active);
+            }
+            if (active)
+            {
+                hudMagnetTimerText.text = $"{magnetTimerPrefix}{magTime:F1}{timerSuffix}";
+            }
         }
     }
 

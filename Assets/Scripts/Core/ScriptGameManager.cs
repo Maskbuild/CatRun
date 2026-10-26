@@ -22,12 +22,12 @@ public class ScriptGameManager : MonoBehaviour
     public int CurrentScore { get; private set; }
     public int HighScore { get; private set; }
 
-    public bool IsBeingChased => chaserController != null && chaserController.IsChasing;
+    public bool IsBeingChased => chaserController != null && chaserController.CanCatchPlayer;
 
     private float startZ;
 
-    private const string HighScoreKey = "EndlessRun_HighScore";
-    private const string TotalCoinsKey = "EndlessRun_TotalCoins";
+    public const string HighScoreKey = "EndlessRun_HighScore";
+    public const string TotalCoinsKey = "EndlessRun_TotalCoins";
 
     public bool IsPlaying => State == GameState.Playing;
 
@@ -82,6 +82,7 @@ public class ScriptGameManager : MonoBehaviour
     {
         SessionCoins = 0;
         CurrentScore = 0;
+        TotalCoins = PlayerPrefs.GetInt(TotalCoinsKey, 0);
 
         if (playerTransform != null)
             startZ = playerTransform.position.z;
@@ -109,7 +110,7 @@ public class ScriptGameManager : MonoBehaviour
 
         if (chaserController != null)
         {
-            if (chaserController.IsChasing)
+            if (chaserController.CanCatchPlayer)
             {
                 chaserController.CatchPlayer();
                 GameOver();
@@ -147,6 +148,8 @@ public class ScriptGameManager : MonoBehaviour
 
         SessionCoins++;
         TotalCoins++;
+
+        PlayerPrefs.SetInt(TotalCoinsKey, TotalCoins);
 
         if (uiManager != null)
         {
