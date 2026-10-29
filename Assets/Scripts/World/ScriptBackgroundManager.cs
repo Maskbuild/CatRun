@@ -12,32 +12,20 @@ public class ScriptBackgroundManager : MonoBehaviour
     [Header("Player Reference")]
     public Transform player;
 
-    [Header("Custom Starting Backgrounds (ฉากหลังจุดเริ่มต้น — เว้นว่างได้)")]
-    [Tooltip("หากมีฉากหลังเฉพาะสำหรับจุดปล่อยตัวตอนเริ่มเกม (ไม่ต้องการให้วนซ้ำกลางทาง) ลากมาใส่ช่องนี้ได้")]
+    [Header("Custom Starting Backgrounds")]
     public GameObject[] startingBackgroundPrefabs;
 
-    [Header("Background Sets (ใส่ Prefab ฉากหลังที่จะนำมาต่อกัน)")]
-    [Tooltip("ลาก Prefab ของฉากหลัง (เช่น BG_Set_1, BG_Set_2, BG_Set_3) มาใส่ตามลำดับที่ต้องการให้เชื่อมต่อกัน")]
+    [Header("Background Sets")]
     public GameObject[] backgroundPrefabs;
-
-    [Tooltip("เลือกว่าจะให้ฉากหลังเรียงต่อกันตามลำดับ (Sequential) หรือสุ่ม (Random)")]
     public SpawnOrderMode orderMode = SpawnOrderMode.Sequential;
-
-    [Tooltip("จำนวนสำเนาขั้นต่ำที่จะสร้างเตรียมไว้ต่อฉากหลัง 1 แบบ")]
     public int copiesPerPrefab = 3;
 
     [Header("Background Dimensions & Pool Settings")]
-    [Tooltip("ความยาวของฉากหลัง 1 ชิ้นในแกน Z (เมตร) — ตั้งแยกจากความยาวถนนได้ เช่น 20, 40 หรือ 60 เมตร")]
     public float backgroundLength = 20f;
-
-    [Tooltip("จำนวนชิ้นฉากหลังที่วางล่วงหน้าด้านหน้าผู้เล่น")]
     public int backgroundsOnScreen = 6;
-
-    [Tooltip("เมื่อผู้เล่นวิ่งพ้นฉากหลังชิ้นนั้นไปแล้ว จะปล่อยให้ค้างอยู่ด้านหลังอีกกี่เมตรก่อนซ่อน (Hide)")]
     public float hideBehindDistance = 30f;
 
-    [Header("Position Offset (ปรับตำแหน่งระดับความสูงหรือเยื้องซ้าย-ขวา)")]
-    [Tooltip("ตำแหน่ง X และ Y ของฉากหลัง (ปกติตั้งเป็น 0, 0)")]
+    [Header("Position Offset")]
     public Vector2 positionOffsetXY = Vector2.zero;
 
     private float nextSpawnZ = 0f;

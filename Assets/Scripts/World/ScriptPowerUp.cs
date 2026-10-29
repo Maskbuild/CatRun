@@ -18,12 +18,10 @@ public class ScriptPowerUp : MonoBehaviour
         {
             case PowerUpType.Invincibility:
                 player.ActivateInvincibility();
-                Debug.Log("[Power-Up!] เปิดสถานะอมตะ 10 วินาที!");
                 break;
 
             case PowerUpType.CoinMagnet:
                 player.ActivateMagnet();
-                Debug.Log("[Power-Up!] เปิดแม่เหล็กดูดเหรียญ 10 วินาที!");
                 break;
         }
     }

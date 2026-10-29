@@ -9,9 +9,7 @@ public class ScriptGameManager : MonoBehaviour
 
     [Header("Player, Chaser & UI References")]
     public Transform playerTransform;
-    [Tooltip("ลากวัตถุ DogChaser (ที่มี ScriptChaserController) มาใส่ หรือปล่อยว่างไว้ให้ระบบค้นหาเองอัตโนมัติ")]
     public ScriptChaserController chaserController;
-    [Tooltip("ลากวัตถุ UIManager (ที่มี ScriptUIManager) มาใส่ หรือปล่อยว่างไว้ให้ระบบค้นหาเองอัตโนมัติ")]
     public ScriptUIManager uiManager;
 
     [Header("Score Settings")]
@@ -33,41 +31,46 @@ public class ScriptGameManager : MonoBehaviour
 
     void Awake()
     {
-        if (Instance != null && Instance != this)
-        {
-            Destroy(gameObject);
-            return;
-        }
         Instance = this;
+        Time.timeScale = 1f;
+        State = GameState.Playing;
 
         HighScore = PlayerPrefs.GetInt(HighScoreKey, 0);
         TotalCoins = PlayerPrefs.GetInt(TotalCoinsKey, 0);
     }
 
-    void Start()
+    void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+    }
+
+    private void EnsurePlayerTransform()
     {
         if (playerTransform == null)
         {
             GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
             if (playerObj != null) playerTransform = playerObj.transform;
         }
+    }
 
-        if (chaserController == null)
-        {
-            chaserController = FindFirstObjectByType<ScriptChaserController>();
-        }
-
-        if (uiManager == null)
-        {
-            uiManager = FindFirstObjectByType<ScriptUIManager>();
-        }
-
+    void Start()
+    {
+        Time.timeScale = 1f;
+        EnsurePlayerTransform();
+        if (chaserController == null) chaserController = FindFirstObjectByType<ScriptChaserController>();
+        if (uiManager == null) uiManager = FindFirstObjectByType<ScriptUIManager>();
         StartGame();
     }
 
     void Update()
     {
-        if (!IsPlaying || playerTransform == null) return;
+        if (!IsPlaying) return;
+
+        EnsurePlayerTransform();
+        if (playerTransform == null) return;
 
         float distance = Mathf.Max(0f, playerTransform.position.z - startZ);
         CurrentScore = Mathf.FloorToInt(distance * scoreMultiplier);
@@ -90,56 +93,30 @@ public class ScriptGameManager : MonoBehaviour
         State = GameState.Playing;
         Time.timeScale = 1f;
 
-        if (chaserController != null)
-        {
-            chaserController.StartInitialChase();
-        }
-
+        if (chaserController != null) chaserController.StartInitialChase();
         if (uiManager != null)
         {
             uiManager.ShowGameplayHUD();
             uiManager.UpdateHUD();
         }
 
-        Debug.Log($"[Game Start] เริ่มวิ่ง! (หมากำลังไล่ตามช่วงแรก) | High Score: {HighScore}m | Total Coins: {TotalCoins}");
+        if (ScriptAudioManager.Instance != null) ScriptAudioManager.Instance.PlayGameplayBGM();
     }
 
     public void OnPlayerHitObstacle(ScriptPlayerController player)
     {
         if (!IsPlaying) return;
 
-        if (chaserController != null)
+        if (chaserController != null && chaserController.CanCatchPlayer)
         {
-            if (chaserController.CanCatchPlayer)
-            {
-                chaserController.CatchPlayer();
-                GameOver();
-            }
-            else
-            {
-                if (player != null)
-                {
-                    player.TriggerBlinkEffect();
-                }
-                chaserController.StartChaseAfterMistake();
-            }
+            chaserController.CatchPlayer();
+            GameOver();
+            return;
         }
-        else
-        {
-            if (player != null)
-            {
-                player.TriggerBlinkEffect();
-            }
-            Debug.LogWarning("[ScriptGameManager] ยังไม่ได้สร้าง DogChaser (ScriptChaserController) ในฉาก!");
-        }
-    }
 
-    public void TakeDamage(int amount = 1)
-    {
-        ScriptPlayerController player = playerTransform != null
-            ? playerTransform.GetComponent<ScriptPlayerController>()
-            : FindFirstObjectByType<ScriptPlayerController>();
-        OnPlayerHitObstacle(player);
+        if (ScriptAudioManager.Instance != null) ScriptAudioManager.Instance.PlayHit();
+        if (player != null) player.TriggerBlinkEffect();
+        if (chaserController != null) chaserController.StartChaseAfterMistake();
     }
 
     public void AddCoin()
@@ -148,21 +125,24 @@ public class ScriptGameManager : MonoBehaviour
 
         SessionCoins++;
         TotalCoins++;
-
         PlayerPrefs.SetInt(TotalCoinsKey, TotalCoins);
 
         if (uiManager != null)
         {
             uiManager.UpdateHUD();
         }
-
-        Debug.Log($"[Coin Collected] เหรียญรอบนี้: {SessionCoins} (สะสมทั้งหมด: {TotalCoins}) | ระยะทาง: {CurrentScore}m");
     }
 
     public void GameOver()
     {
         State = GameState.GameOver;
         Time.timeScale = 0f;
+
+        if (ScriptAudioManager.Instance != null)
+        {
+            ScriptAudioManager.Instance.SetRunningSound(false);
+            ScriptAudioManager.Instance.PlayCatch();
+        }
 
         if (CurrentScore >= HighScore)
         {
@@ -180,8 +160,6 @@ public class ScriptGameManager : MonoBehaviour
         {
             uiManager.ShowGameOverUI();
         }
-
-        Debug.Log($"=== GAME OVER (โดนหมาจับได้!) === ระยะทาง: {CurrentScore}m | High Score: {HighScore}m | เหรียญรอบนี้: {SessionCoins} (รวมทั้งหมด: {TotalCoins})");
     }
 
     public void SetPaused(bool paused)
@@ -190,5 +168,10 @@ public class ScriptGameManager : MonoBehaviour
 
         State = paused ? GameState.Paused : GameState.Playing;
         Time.timeScale = paused ? 0f : 1f;
+
+        if (paused && ScriptAudioManager.Instance != null)
+        {
+            ScriptAudioManager.Instance.SetRunningSound(false);
+        }
     }
 }

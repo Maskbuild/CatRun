@@ -3,25 +3,24 @@ using UnityEngine;
 
 public class ScriptTileHandler : MonoBehaviour
 {
-    [Header("Fixed Obstacle Group (กลุ่มสิ่งกีดขวางที่วางเซตไว้ใน Tile นี้)")]
-    [Tooltip("ลาก Empty GameObject ที่รวม Obstacle ของ Tile นี้มาใส่ (เพื่อให้ปิดซ่อนได้ใน 2 แผ่นแรกตอนเริ่มเกม)")]
+    [Header("Fixed Obstacle Group")]
     public GameObject obstacleContainer;
 
-    [Header("Collectible Prefabs (สิ่งที่ต้องสุ่มเกิด)")]
+    [Header("Collectible Prefabs")]
     public GameObject coinPrefab;
     public GameObject[] powerUpPrefabs;
 
-    [Header("Coin Row Settings (สุ่มเกิดเหรียญเป็นแถว)")]
+    [Header("Coin Row Settings")]
     [Range(0f, 1f)] public float coinRowChance = 0.75f; 
     public int minCoinsInRow = 4;                    
     public int maxCoinsInRow = 6;                   
     public float coinSpacingZ = 2.0f;                  
     public float spawnHeightY = 1.0f;                 
 
-    [Header("Single Power-Up Settings (สุ่มเกิด Power-Up แบบเดี่ยว)")]
+    [Header("Single Power-Up Settings")]
     [Range(0f, 1f)] public float powerUpChance = 0.20f; 
 
-    [Header("Obstacle Collision Check (เช็กว่ามีสิ่งกีดขวางขวางจุดเกิดไหม)")]
+    [Header("Obstacle Collision Check")]
     public float obstacleCheckRadius = 0.75f;        
 
     private readonly List<GameObject> spawnedItems = new List<GameObject>();
@@ -107,7 +106,10 @@ public class ScriptTileHandler : MonoBehaviour
         }
     }
 
-    private bool IsBlockedByObstacle(Vector3 worldPos)
+    private bool IsBlockedByObstacle(Vector3 worldPos) => IsBlockedByTags(worldPos, "Obstacle");
+    private bool IsBlockedByCollectible(Vector3 worldPos) => IsBlockedByTags(worldPos, "Coin", "PowerUp");
+
+    private bool IsBlockedByTags(Vector3 worldPos, params string[] tags)
     {
         Collider[] hits = Physics.OverlapSphere(
             worldPos,
@@ -116,30 +118,11 @@ public class ScriptTileHandler : MonoBehaviour
             QueryTriggerInteraction.Collide
         );
 
-        foreach (Collider col in hits)
+        for (int i = 0; i < hits.Length; i++)
         {
-            if (col.CompareTag("Obstacle"))
+            for (int t = 0; t < tags.Length; t++)
             {
-                return true; 
-            }
-        }
-        return false;
-    }
-
-    private bool IsBlockedByCollectible(Vector3 worldPos)
-    {
-        Collider[] hits = Physics.OverlapSphere(
-            worldPos,
-            obstacleCheckRadius,
-            ~0,
-            QueryTriggerInteraction.Collide
-        );
-
-        foreach (Collider col in hits)
-        {
-            if (col.CompareTag("Coin") || col.CompareTag("PowerUp"))
-            {
-                return true;
+                if (hits[i].CompareTag(tags[t])) return true;
             }
         }
         return false;

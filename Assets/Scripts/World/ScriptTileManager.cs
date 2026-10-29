@@ -6,26 +6,19 @@ public class ScriptTileManager : MonoBehaviour
     [Header("Player Reference")]
     public Transform player;
 
-    [Header("Custom Starting / Safe Tiles (ด่านจุดเริ่มต้นที่ออกแบบไว้เอง — ถ้ามี)")]
-    [Tooltip("ลาก Prefab ของด่านจุดเริ่มต้น/พื้นที่โล่งที่คุณออกแบบไว้เองมาใส่ได้ (เช่น 1 หรือ 2 แผ่นแรก) ถ้าปล่อยว่างไว้ ระบบจะสุ่มจาก Tile Set ปกติแล้วซ่อน Obstacle แทน")]
+    [Header("Custom Starting")]
     public GameObject[] startingTilePrefabs;
 
-    [Header("Pre-built Tile Sets (ใส่ Prefab ของชุดด่านหลักที่จะวนสุ่มไปเรื่อยๆ)")]
-    [Tooltip("ลาก Tile Prefab ทั้งหมดที่จัดเซตสิ่งกีดขวางไว้แล้วมาใส่ (ใส่แค่ 1 แมพก่อนก็ได้ ระบบจะปั๊มสำเนาให้เอง)")]
+    [Header("Pre-built Tile Sets")]
     public GameObject[] tileSetPrefabs;
-
-    [Tooltip("จำนวนชุดสำรองขั้นต่ำที่จะสร้างเตรียมไว้ต่อ 1 รูปแบบ")]
     public int copiesPerSet = 3;
 
     [Header("Track Dimensions & Pool Settings")]
     public float tileLength = GameConstants.TileLength;
-    [Tooltip("จำนวนแผ่นพื้นที่วางล่วงหน้าด้านหน้าผู้เล่น")]
     public int tilesOnScreen = 6;
-    [Tooltip("จำนวนแผ่นแรกตอนเริ่มเกมที่จะยังไม่เปิดสิ่งกีดขวาง (ในกรณีไม่ได้ใส่ Starting Tile Prefabs)")]
     public int safeTiles = 2;
 
-    [Header("Delay Before Hiding (ระยะค้างด้านหลังผู้เล่นก่อนแมพหาย)")]
-    [Tooltip("เมื่อผู้เล่นวิ่งพ้นแผ่นพื้นไปแล้ว จะปล่อยให้แผ่นพื้นค้างอยู่ด้านหลังอีกกี่เมตรก่อนซ่อน (เช่น 25 เมตร = ค้างไว้ด้านหลังอีกเกิน 1 แผ่นเต็มๆ กล้องจะไม่เห็นตอนพื้นหาย)")]
+    [Header("Delay Before Hiding")]
     public float hideBehindDistance = 25f;
 
     private float nextSpawnZ = 0f;
