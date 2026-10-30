@@ -37,7 +37,19 @@ public class ScriptShopManager : MonoBehaviour
     public TMP_Text feedbackMessageText;
     public TMP_Text[] slotButtonTexts;
 
+    public static ScriptShopManager Instance { get; private set; }
+
     private int currentPreviewIndex = 0;
+
+    void Awake()
+    {
+        Instance = this;
+    }
+
+    void OnDestroy()
+    {
+        if (Instance == this) Instance = null;
+    }
 
     void Start()
     {
