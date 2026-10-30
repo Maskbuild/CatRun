@@ -288,22 +288,30 @@ public class ScriptUIManager : MonoBehaviour
 
     public void OnRestartButtonClicked()
     {
-        if (ScriptAudioManager.Instance != null) ScriptAudioManager.Instance.PlayButtonClick();
+        if (ScriptAudioManager.Instance != null)
+        {
+            ScriptAudioManager.Instance.PlayButtonClick();
+            ScriptAudioManager.Instance.FadeOutBGM(0.5f);
+        }
 
         Time.timeScale = 1f;
         ResetCountdown();
-        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+        ScriptScreenFader.FadeAndLoadScene(SceneManager.GetActiveScene().name, 0.5f);
     }
 
     public void OnBackToMenuButtonClicked()
     {
-        if (ScriptAudioManager.Instance != null) ScriptAudioManager.Instance.PlayButtonClick();
+        if (ScriptAudioManager.Instance != null)
+        {
+            ScriptAudioManager.Instance.PlayButtonClick();
+            ScriptAudioManager.Instance.FadeOutBGM(0.5f);
+        }
 
         Time.timeScale = 1f;
         ResetCountdown();
 
         string sceneName = mainMenuScene != null ? mainMenuScene.name : "00_MainMenu";
-        SceneManager.LoadScene(sceneName);
+        ScriptScreenFader.FadeAndLoadScene(sceneName, 0.5f);
     }
 
     private void SetPanelActive(GameObject panel, bool active)

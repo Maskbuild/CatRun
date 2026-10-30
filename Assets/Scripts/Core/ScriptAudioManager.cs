@@ -30,17 +30,17 @@ public class ScriptAudioManager : MonoBehaviour
     public float MusicVolume { get; private set; } = 0.8f;
     public float SfxVolume { get; private set; } = 0.8f;
 
+    private float currentFadeMultiplier = 1.0f;
+    private Coroutine bgmFadeCoroutine;
+
     void Awake()
     {
         if (Instance != null && Instance != this)
         {
-            // ลบเฉพาะคอมโพเนนต์นี้ ไม่ลบทั้ง GameObject (กันลบ GameManager/สคริปต์อื่นที่อยู่ร่วมกัน)
             Destroy(this);
             return;
         }
 
-        // ถ้าอยู่ร่วม GameObject กับสคริปต์อื่น (เช่น GameManager) ให้ย้ายตัวเองไป GameObject ใหม่
-        // เพื่อไม่ให้ DontDestroyOnLoad พาสคริปต์อื่นข้ามฉากไปด้วย
         if (SharesGameObjectWithOtherScripts() || transform.parent != null)
         {
             RelocateToOwnGameObject();
@@ -56,6 +56,14 @@ public class ScriptAudioManager : MonoBehaviour
         LoadVolumeSettings();
     }
 
+    void Start()
+    {
+        if (menuBGM != null && (bgmSource == null || !bgmSource.isPlaying))
+        {
+            PlayMenuBGM();
+        }
+    }
+
     private bool SharesGameObjectWithOtherScripts()
     {
         foreach (MonoBehaviour mb in GetComponents<MonoBehaviour>())
@@ -68,7 +76,7 @@ public class ScriptAudioManager : MonoBehaviour
     private void RelocateToOwnGameObject()
     {
         GameObject go = new GameObject("AudioManager (Persistent)");
-        go.SetActive(false); // กัน Awake ทำงานก่อนคัดลอกค่าเสร็จ
+        go.SetActive(false); 
 
         ScriptAudioManager copy = go.AddComponent<ScriptAudioManager>();
         copy.menuBGM = menuBGM;
@@ -80,12 +88,11 @@ public class ScriptAudioManager : MonoBehaviour
         copy.coinSFX = coinSFX;
         copy.powerUpSFX = powerUpSFX;
         copy.buttonClickSFX = buttonClickSFX;
-        // AudioSource เดิมอยู่บน GameObject ที่จะถูกลบตอนเปลี่ยนฉาก จึงให้สร้างใหม่บนตัวใหม่
         copy.bgmSource = null;
         copy.sfxSource = null;
         copy.runningSource = null;
 
-        go.SetActive(true); // Awake ของตัวใหม่จะตั้ง Instance + DontDestroyOnLoad
+        go.SetActive(true); 
     }
 
     void OnDestroy()
@@ -100,6 +107,7 @@ public class ScriptAudioManager : MonoBehaviour
             bgmSource = gameObject.AddComponent<AudioSource>();
             bgmSource.loop = true;
             bgmSource.playOnAwake = false;
+            bgmSource.spatialBlend = 0f;
         }
 
         if (sfxSource == null)
@@ -107,6 +115,7 @@ public class ScriptAudioManager : MonoBehaviour
             sfxSource = gameObject.AddComponent<AudioSource>();
             sfxSource.loop = false;
             sfxSource.playOnAwake = false;
+            sfxSource.spatialBlend = 0f;
         }
 
         if (runningSource == null)
@@ -114,6 +123,7 @@ public class ScriptAudioManager : MonoBehaviour
             runningSource = gameObject.AddComponent<AudioSource>();
             runningSource.loop = true;
             runningSource.playOnAwake = false;
+            runningSource.spatialBlend = 0f;
         }
     }
 
@@ -129,7 +139,7 @@ public class ScriptAudioManager : MonoBehaviour
     {
         if (bgmSource != null)
         {
-            bgmSource.volume = MasterVolume * MusicVolume;
+            bgmSource.volume = MasterVolume * MusicVolume * currentFadeMultiplier;
         }
 
         if (runningSource != null)
@@ -149,23 +159,175 @@ public class ScriptAudioManager : MonoBehaviour
         ApplyVolumes();
     }
 
-    public void PlayMenuBGM() => PlayBGM(menuBGM);
-    public void PlayGameplayBGM() => PlayBGM(gameplayBGM);
-
-    private void PlayBGM(AudioClip clip)
+    public void PlayMenuBGM(bool smooth = true, float duration = 1.0f)
     {
-        if (clip == null || bgmSource == null || (bgmSource.clip == clip && bgmSource.isPlaying)) return;
+        if (smooth) CrossfadeBGM(menuBGM, duration);
+        else PlayBGMImmediate(menuBGM);
+    }
+
+    public void PlayGameplayBGM(bool smooth = true, float duration = 1.0f)
+    {
+        if (smooth) CrossfadeBGM(gameplayBGM, duration);
+        else PlayBGMImmediate(gameplayBGM);
+    }
+
+    public void PlayBGMImmediate(AudioClip clip)
+    {
+        if (bgmFadeCoroutine != null) StopCoroutine(bgmFadeCoroutine);
+        if (clip == null || bgmSource == null) return;
+
         bgmSource.clip = clip;
+        currentFadeMultiplier = 1.0f;
         bgmSource.volume = MasterVolume * MusicVolume;
         bgmSource.Play();
     }
 
+    public void FadeOutBGM(float duration = 1.0f, System.Action onComplete = null)
+    {
+        if (bgmFadeCoroutine != null) StopCoroutine(bgmFadeCoroutine);
+        bgmFadeCoroutine = StartCoroutine(RoutineFadeOutBGM(duration, onComplete));
+    }
+
+    public void FadeInBGM(AudioClip clip, float duration = 1.0f)
+    {
+        if (bgmFadeCoroutine != null) StopCoroutine(bgmFadeCoroutine);
+        bgmFadeCoroutine = StartCoroutine(RoutineFadeInBGM(clip, duration));
+    }
+
+    public void CrossfadeBGM(AudioClip newClip, float duration = 1.0f)
+    {
+        if (newClip == null)
+        {
+            FadeOutBGM(duration);
+            return;
+        }
+
+        if (bgmSource == null) return;
+
+        if (bgmSource.clip == newClip && bgmSource.isPlaying)
+        {
+            if (bgmFadeCoroutine != null) StopCoroutine(bgmFadeCoroutine);
+            bgmFadeCoroutine = StartCoroutine(RoutineFadeInBGM(newClip, duration));
+            return;
+        }
+
+        if (bgmFadeCoroutine != null) StopCoroutine(bgmFadeCoroutine);
+        bgmFadeCoroutine = StartCoroutine(RoutineCrossfadeBGM(newClip, duration));
+    }
+
+    private System.Collections.IEnumerator RoutineCrossfadeBGM(AudioClip newClip, float duration)
+    {
+        if (bgmSource == null) yield break;
+
+        if (bgmSource.isPlaying && bgmSource.clip != null)
+        {
+            float halfDuration = Mathf.Max(0.05f, duration * 0.45f);
+            float startMultiplier = currentFadeMultiplier;
+            float elapsed = 0f;
+
+            while (elapsed < halfDuration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                currentFadeMultiplier = Mathf.Lerp(startMultiplier, 0f, elapsed / halfDuration);
+                bgmSource.volume = MasterVolume * MusicVolume * currentFadeMultiplier;
+                yield return null;
+            }
+
+            currentFadeMultiplier = 0f;
+            bgmSource.volume = 0f;
+            bgmSource.Stop();
+        }
+
+        if (newClip == null)
+        {
+            bgmFadeCoroutine = null;
+            yield break;
+        }
+
+        bgmSource.clip = newClip;
+        currentFadeMultiplier = 0f;
+        bgmSource.volume = 0f;
+        bgmSource.Play();
+
+        float fadeInDuration = Mathf.Max(0.05f, duration * 0.55f);
+        float inElapsed = 0f;
+        while (inElapsed < fadeInDuration)
+        {
+            inElapsed += Time.unscaledDeltaTime;
+            currentFadeMultiplier = Mathf.Lerp(0f, 1f, inElapsed / fadeInDuration);
+            bgmSource.volume = MasterVolume * MusicVolume * currentFadeMultiplier;
+            yield return null;
+        }
+
+        currentFadeMultiplier = 1f;
+        bgmSource.volume = MasterVolume * MusicVolume;
+        bgmFadeCoroutine = null;
+    }
+
+    private System.Collections.IEnumerator RoutineFadeOutBGM(float duration, System.Action onComplete = null)
+    {
+        if (bgmSource == null || !bgmSource.isPlaying)
+        {
+            onComplete?.Invoke();
+            yield break;
+        }
+
+        float startMultiplier = currentFadeMultiplier;
+        float elapsed = 0f;
+        duration = Mathf.Max(0.05f, duration);
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            currentFadeMultiplier = Mathf.Lerp(startMultiplier, 0f, elapsed / duration);
+            bgmSource.volume = MasterVolume * MusicVolume * currentFadeMultiplier;
+            yield return null;
+        }
+
+        currentFadeMultiplier = 0f;
+        bgmSource.volume = 0f;
+        bgmSource.Stop();
+        bgmFadeCoroutine = null;
+        onComplete?.Invoke();
+    }
+
+    private System.Collections.IEnumerator RoutineFadeInBGM(AudioClip clip, float duration)
+    {
+        if (bgmSource == null || clip == null) yield break;
+
+        if (bgmSource.clip != clip || !bgmSource.isPlaying)
+        {
+            bgmSource.clip = clip;
+            currentFadeMultiplier = 0f;
+            bgmSource.volume = 0f;
+            bgmSource.Play();
+        }
+
+        float startMultiplier = currentFadeMultiplier;
+        float elapsed = 0f;
+        duration = Mathf.Max(0.05f, duration);
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            currentFadeMultiplier = Mathf.Lerp(startMultiplier, 1f, elapsed / duration);
+            bgmSource.volume = MasterVolume * MusicVolume * currentFadeMultiplier;
+            yield return null;
+        }
+
+        currentFadeMultiplier = 1f;
+        bgmSource.volume = MasterVolume * MusicVolume;
+        bgmFadeCoroutine = null;
+    }
+
     public void StopBGM()
     {
+        if (bgmFadeCoroutine != null) StopCoroutine(bgmFadeCoroutine);
         if (bgmSource != null)
         {
             bgmSource.Stop();
         }
+        currentFadeMultiplier = 1.0f;
     }
 
     public void PlayJump() => PlaySFX(jumpSFX);

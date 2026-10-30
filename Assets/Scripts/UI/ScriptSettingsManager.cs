@@ -20,14 +20,29 @@ public class ScriptSettingsManager : MonoBehaviour
 
     [Header("Screen & Display")]
     public TMP_Dropdown resolutionDropdown;
+    public TMP_Dropdown screenModeDropdown;
     public Toggle fullscreenToggle;
+
+    public enum DisplayMode
+    {
+        Fullscreen = 0,
+        Borderless = 1,
+        Windowed = 2
+    }
 
     private readonly List<ResolutionOption> resolutionOptions = new List<ResolutionOption>()
     {
-        new ResolutionOption(1920, 1080, "1920 x 1080 (Full HD)"),
-        new ResolutionOption(1600, 900,  "1600 x 900 (HD+)"),
-        new ResolutionOption(1366, 768,  "1366 x 768 (Laptop)"),
-        new ResolutionOption(1280, 720,  "1280 x 720 (HD)")
+        new ResolutionOption(1920, 1080, "1920 x 1080"),
+        new ResolutionOption(1600, 900,  "1600 x 900"),
+        new ResolutionOption(1366, 768,  "1366 x 768"),
+        new ResolutionOption(1280, 720,  "1280 x 720")
+    };
+
+    private readonly List<string> screenModeOptions = new List<string>()
+    {
+        "Fullscreen",
+        "Borderless",
+        "Windowed"
     };
 
     private struct ResolutionOption
@@ -46,6 +61,7 @@ public class ScriptSettingsManager : MonoBehaviour
 
     public const string ResolutionIndexKey = "Settings_ResolutionIndex";
     public const string FullscreenKey = "Settings_Fullscreen";
+    public const string ScreenModeKey = "Settings_ScreenMode";
 
     void Awake()
     {
@@ -61,6 +77,8 @@ public class ScriptSettingsManager : MonoBehaviour
     {
         InitializeAudioSliders();
         InitializeResolutionDropdown();
+        EnsureScreenModeDropdownExists();
+        InitializeScreenModeDropdown();
         InitializeFullscreenToggle();
 
         ApplySavedResolution();
@@ -142,13 +160,56 @@ public class ScriptSettingsManager : MonoBehaviour
         resolutionDropdown.onValueChanged.AddListener(OnResolutionChanged);
     }
 
+    private void EnsureScreenModeDropdownExists()
+    {
+        if (screenModeDropdown != null) return;
+
+        if (resolutionDropdown != null)
+        {
+            GameObject clonedObj = Instantiate(resolutionDropdown.gameObject, resolutionDropdown.transform.parent);
+            clonedObj.name = "screenModeDropdown";
+
+            RectTransform rect = clonedObj.GetComponent<RectTransform>();
+            RectTransform origRect = resolutionDropdown.GetComponent<RectTransform>();
+            if (rect != null && origRect != null)
+            {
+                rect.anchoredPosition = new Vector2(origRect.anchoredPosition.x, origRect.anchoredPosition.y - 65f);
+            }
+
+            screenModeDropdown = clonedObj.GetComponent<TMP_Dropdown>();
+        }
+    }
+
+    private void InitializeScreenModeDropdown()
+    {
+        if (screenModeDropdown == null) return;
+
+        screenModeDropdown.ClearOptions();
+        screenModeDropdown.AddOptions(screenModeOptions);
+
+        int savedMode = PlayerPrefs.GetInt(ScreenModeKey, 1);
+        savedMode = Mathf.Clamp(savedMode, 0, screenModeOptions.Count - 1);
+
+        screenModeDropdown.value = savedMode;
+        screenModeDropdown.RefreshShownValue();
+
+        screenModeDropdown.onValueChanged.RemoveAllListeners();
+        screenModeDropdown.onValueChanged.AddListener(OnScreenModeChanged);
+    }
+
     private void InitializeFullscreenToggle()
     {
+        if (fullscreenToggle == null && settingsPanel != null)
+        {
+            fullscreenToggle = settingsPanel.GetComponentInChildren<Toggle>(true);
+        }
+
         if (fullscreenToggle == null) return;
 
-        bool isFullscreen = PlayerPrefs.GetInt(FullscreenKey, Screen.fullScreen ? 1 : 0) == 1;
-        fullscreenToggle.isOn = isFullscreen;
+        int savedMode = PlayerPrefs.GetInt(ScreenModeKey, 1);
+        bool isFullscreen = savedMode != (int)DisplayMode.Windowed;
 
+        fullscreenToggle.isOn = isFullscreen;
         fullscreenToggle.onValueChanged.RemoveAllListeners();
         fullscreenToggle.onValueChanged.AddListener(OnFullscreenToggleChanged);
     }
@@ -160,7 +221,29 @@ public class ScriptSettingsManager : MonoBehaviour
         PlayerPrefs.SetInt(ResolutionIndexKey, index);
         PlayerPrefs.Save();
 
-        ApplyResolution(resolutionOptions[index].width, resolutionOptions[index].height, Screen.fullScreen);
+        int savedMode = PlayerPrefs.GetInt(ScreenModeKey, 1);
+        ApplyResolution(resolutionOptions[index].width, resolutionOptions[index].height, (DisplayMode)savedMode);
+
+        if (ScriptAudioManager.Instance != null)
+            ScriptAudioManager.Instance.PlayButtonClick();
+    }
+
+    public void OnScreenModeChanged(int modeIndex)
+    {
+        modeIndex = Mathf.Clamp(modeIndex, 0, 2);
+        PlayerPrefs.SetInt(ScreenModeKey, modeIndex);
+        PlayerPrefs.SetInt(FullscreenKey, modeIndex != (int)DisplayMode.Windowed ? 1 : 0);
+        PlayerPrefs.Save();
+
+        if (fullscreenToggle != null)
+        {
+            fullscreenToggle.SetIsOnWithoutNotify(modeIndex != (int)DisplayMode.Windowed);
+        }
+
+        int savedIndex = PlayerPrefs.GetInt(ResolutionIndexKey, 0);
+        savedIndex = Mathf.Clamp(savedIndex, 0, resolutionOptions.Count - 1);
+
+        ApplyResolution(resolutionOptions[savedIndex].width, resolutionOptions[savedIndex].height, (DisplayMode)modeIndex);
 
         if (ScriptAudioManager.Instance != null)
             ScriptAudioManager.Instance.PlayButtonClick();
@@ -168,13 +251,31 @@ public class ScriptSettingsManager : MonoBehaviour
 
     public void OnFullscreenToggleChanged(bool isFullscreen)
     {
+        int targetMode;
+        if (isFullscreen)
+        {
+            int prevMode = PlayerPrefs.GetInt(ScreenModeKey, 1);
+            targetMode = (prevMode == (int)DisplayMode.Windowed) ? (int)DisplayMode.Borderless : prevMode;
+        }
+        else
+        {
+            targetMode = (int)DisplayMode.Windowed;
+        }
+
+        PlayerPrefs.SetInt(ScreenModeKey, targetMode);
         PlayerPrefs.SetInt(FullscreenKey, isFullscreen ? 1 : 0);
         PlayerPrefs.Save();
+
+        if (screenModeDropdown != null)
+        {
+            screenModeDropdown.SetValueWithoutNotify(targetMode);
+            screenModeDropdown.RefreshShownValue();
+        }
 
         int savedIndex = PlayerPrefs.GetInt(ResolutionIndexKey, 0);
         savedIndex = Mathf.Clamp(savedIndex, 0, resolutionOptions.Count - 1);
 
-        ApplyResolution(resolutionOptions[savedIndex].width, resolutionOptions[savedIndex].height, isFullscreen);
+        ApplyResolution(resolutionOptions[savedIndex].width, resolutionOptions[savedIndex].height, (DisplayMode)targetMode);
 
         if (ScriptAudioManager.Instance != null)
             ScriptAudioManager.Instance.PlayButtonClick();
@@ -184,14 +285,31 @@ public class ScriptSettingsManager : MonoBehaviour
     {
         int savedIndex = PlayerPrefs.GetInt(ResolutionIndexKey, 0);
         savedIndex = Mathf.Clamp(savedIndex, 0, resolutionOptions.Count - 1);
-        bool isFullscreen = PlayerPrefs.GetInt(FullscreenKey, Screen.fullScreen ? 1 : 0) == 1;
 
-        ApplyResolution(resolutionOptions[savedIndex].width, resolutionOptions[savedIndex].height, isFullscreen);
+        int savedMode = PlayerPrefs.GetInt(ScreenModeKey, 1);
+        savedMode = Mathf.Clamp(savedMode, 0, 2);
+
+        ApplyResolution(resolutionOptions[savedIndex].width, resolutionOptions[savedIndex].height, (DisplayMode)savedMode);
     }
 
-    private void ApplyResolution(int width, int height, bool isFullscreen)
+    private void ApplyResolution(int width, int height, DisplayMode mode)
     {
-        Screen.SetResolution(width, height, isFullscreen ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed);
+        FullScreenMode unityMode;
+        switch (mode)
+        {
+            case DisplayMode.Fullscreen:
+                unityMode = FullScreenMode.ExclusiveFullScreen;
+                break;
+            case DisplayMode.Borderless:
+                unityMode = FullScreenMode.FullScreenWindow;
+                break;
+            case DisplayMode.Windowed:
+            default:
+                unityMode = FullScreenMode.Windowed;
+                break;
+        }
+
+        Screen.SetResolution(width, height, unityMode);
     }
 
     public void OpenSettings()
